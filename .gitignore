@@ -112,3 +112,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Others
+unity-environment.log
+Tennis_Windows_x86_64
+TennisEnvironments
