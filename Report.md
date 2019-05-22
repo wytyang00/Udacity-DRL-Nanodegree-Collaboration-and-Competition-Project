@@ -16,7 +16,7 @@ The overall algorithm works like this:<br/>
 1. The agents receive current observations.
 2. The actor network takes in each observation and outputs an action for each input observation.
 3. The agents take their actions and receives rewards, the next observations, and a pair of boolean values indicating whether the agents reached the terminal state.
-4. A pair of experience tuples `(state, action, reward, next state, terminal reached)`—one from each agent—is passed to the replay buffer and stored independently in a temporal buffer.
+4. A pair of experience tuples `(state, action, reward, next state, terminal reached)`—one from each agent—is passed to the replay buffer and stored independently in two separate temporal buffer.
 5. If enough consecutive experience tuples are gathered in the temporal buffer, this buffer is copied and added to the main replay buffer with a maximum priority value.
 6. Every `update_every` time steps, specified as a hyperparameter, randomly sample a batch of experiences with probabilities based on their priorities, take a learning step, and update the priorities according to the losses calculated during the learning step.
 7. Repeat these steps until the training is finished.
