@@ -203,7 +203,9 @@ Although the difference seems quite small, the agent performs slightly but notic
 
 ## Issues
 
-Even though my scripts sets random seeds for the environment and all four modules—`random`, `numpy.random`, `torch`, `torch.cuda`—every run showed different progress and results. This is a serious problem since it makes the process irreproducible. I'm planning to track the progress and find where the random processes start to deviate from others.
+Even though my scripts sets random seeds for the environment and all four modules—`random`, `numpy.random`, `torch`, `torch.cuda`—every run showed different progress and results. This is a serious problem since it makes the process irreproducible. ~~I'm planning to track the progress and find where the random processes start to deviate from others.~~
+
+- I narrowed down the source of stochasticity by testing each section of the notebook for two or more runs and comparing the outcomes. It appears that the issue appears as soon as the gradient descent starts. This problem occured only when using a GPU; the algorithm gave me the same result when using CPU.<br/>As I searched for the cause and solution for this inconsistency, I found the [official PyTorch document about reproducibility](https://pytorch.org/docs/stable/notes/randomness.html) and realized that there is currently no simple way to make the GPU operations deterministic.<br/>Therefore, until they come up with a solution, I decided to leave this issue unresolved for now.
 
 ## Future Ideas
 
