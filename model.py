@@ -43,15 +43,15 @@ class NoisyLinear(nn.Module):
     def forward(self, input):
         if self.noise:
             if self.factorized:
-                input_noise  = torch.randn(1, self.noisy_weight.size(1), dtype=self.noisy_weight.dtype, device=self.noisy_weight.device)
+                input_noise  = torch.randn(1, self.noisy_weight.size(1), dtype=self.noisy_weight.dtype).to(self.noisy_weight.device)
                 input_noise  = input_noise.sign().mul(input_noise.abs().sqrt())
-                output_noise = torch.randn(self.noisy_weight.size(0), dtype=self.noisy_weight.dtype, device=self.noisy_weight.device)
+                output_noise = torch.randn(self.noisy_weight.size(0), dtype=self.noisy_weight.dtype).to(self.noisy_weight.device)
                 output_noise = output_noise.sign().mul(output_noise.abs().sqrt())
                 weight_noise = input_noise.mul(output_noise.unsqueeze(1))
                 bias_noise = output_noise
             else:
-                weight_noise = torch.randn_like(self.noisy_weight)
-                bias_noise = None if self.bias is None else torch.randn_like(self.noisy_bias)
+                weight_noise = torch.randn(self.noisy_weight.size(), dtype=self.noisy_weight.dtype).to(self.noisy_weight.device)
+                bias_noise = None if self.bias is None else torch.randn(self.noisy_bias.size(), dtype=self.noisy_bias.dtype).to(self.noisy_bias.device)
 
             if self.bias is None:
                 return F.linear(

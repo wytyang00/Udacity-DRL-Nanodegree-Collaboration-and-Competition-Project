@@ -90,7 +90,10 @@ class Agent():
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
+        # if torch.cuda.is_available():
+        #     torch.backends.cudnn.deterministic = True
+        #     torch.backends.cudnn.benchmark = False
+        #     torch.cuda.manual_seed(seed)
 
         self.state_size           = state_size
         self.action_size          = action_size
@@ -141,7 +144,7 @@ class Agent():
 
         # OU Noise
         self.ou_noise = ZeroMeanOUNoise((self.n_agents, self.action_size), theta=0.15, sigma=initial_eps)
-        self.add_ou_noise = True
+        self.add_ou_noise = (initial_eps != 0)
 
         # Initialize time step (for updating every UPDATE_EVERY steps)
         self.u_step = 0
@@ -202,29 +205,26 @@ class Agent():
 
                 Q_targets_probs = F.softmax(self.critic_target(next_states, next_actions), dim=-1)
 
-                tz_projected    = torch.clamp(rewards + (1 - dones) * gamma * self.supports, min=self.v_min, max=self.v_max)
-                b               = torch.clamp(tz_projected.sub(self.v_min).div(self.delta_z), min=0, max=self.n_atoms - 1)
-                u               = b.ceil()
-                l               = b.floor()
-                u_updates       = b.sub(l).add(u.eq(l).type(u.dtype)) # fixes the problem when having b == u == l
-                l_updates       = u.sub(b)
-                indices_flat    = torch.cat((u.long(), l.long()), dim=1)
+                tz_projected    = rewards + (1 - dones) * gamma * self.supports
+                b               = torch.clamp((tz_projected - self.v_min) / self.delta_z, min=0, max=self.n_atoms - 1)
+                upper           = b.ceil()
+                lower           = b.floor()
+                upper_updates   = (b - lower) + (upper == lower).type(upper.dtype) # fixes the problem when having b == upper == lower
+                lower_updates   = upper - b
+                indices_flat    = torch.cat((upper, lower), dim=1).long()
                 indices_flat    = indices_flat.add(torch.arange(start=0,
-                                                                end=b.size(0) * b.size(1),
+                                                                end=b.numel(),
                                                                 step=b.size(1),
                                                                 dtype=indices_flat.dtype,
-                                                                layout=indices_flat.layout,
                                                                 device=indices_flat.device).unsqueeze(1)).view(-1)
-                updates_flat = torch.cat((u_updates.mul(Q_targets_probs), l_updates.mul(Q_targets_probs)), dim=1).view(-1)
-                Q_target_dists = torch.zeros_like(Q_targets_probs)
+                updates_flat    = torch.cat((upper_updates.mul(Q_targets_probs), lower_updates.mul(Q_targets_probs)), dim=1).view(-1)
+                Q_target_dists  = torch.zeros_like(Q_targets_probs)
                 Q_target_dists.view(-1).index_add_(0, indices_flat, updates_flat)
 
             Q_predicted_dists = self.critic_local(states, actions)
-            # Q_predicted_dists = Q_predicted_dists.sub(Q_predicted_dists.detach().max(dim=-1, keepdim=True)[0])
 
-            # critic_loss_per_instance = Q_target_dists.mul(Q_predicted_dists.exp().sum(dim=-1, keepdim=True).log() - Q_predicted_dists).sum(dim=-1, keepdim=False) # Cross-Entropy
-            # critic_loss_per_instance = Q_target_dists.mul(Q_predicted_dists.exp().sum(dim=-1, keepdim=True).log() - Q_predicted_dists + Q_target_dists.add(Q_target_dists.eq(0).type(Q_target_dists.dtype)).log()).sum(dim=-1, keepdim=False) # KL-Divergence
             critic_loss_per_instance = F.kl_div(F.log_softmax(Q_predicted_dists, dim=-1), Q_target_dists, reduce=False).sum(dim=-1, keepdim=False) # KL-Divergence
+
         ## Single Q Value ##
         else:
             with torch.no_grad():
@@ -235,6 +235,7 @@ class Agent():
 
             critic_loss_per_instance = F.mse_loss(Q_predicted, Q_targets, reduce=False).sum(dim=-1, keepdim=False)
 
+        # New Priority, Critic Loss, and Critic Update #
         new_priorities = critic_loss_per_instance.detach().add(self.priority_eps).cpu().numpy()
         critic_loss = critic_loss_per_instance.mul(is_weights.view(-1)).mean()
 
@@ -284,7 +285,7 @@ class Agent():
         self.actor_local.noise(enable)
         self.add_ou_noise = bool(enable)
 
-    def actor_noise_std(self):
+    def estimate_actor_noise_std(self):
         """Estimate the standard deviation of the resulting noise in actions from the local actor network."""
         states = self.memory.sample(0.)[0][0]
         with torch.no_grad():
@@ -321,12 +322,14 @@ class Agent():
     def eps(self, new_eps):
         if isinstance(new_eps, (int, float)):
             if 0 <= new_eps <= 1:
+                self.add_ou_noise = (new_eps != 0)
                 self.__eps = float(new_eps)
                 self.ou_noise.sigma = self.__eps
             else:
                 raise ValueError("`new_eps` must be in the range of [0, 1], but the given value is", new_eps)
         else:
             raise TypeError("`new_eps` must be a float or int type, but the given type is", type(new_eps))
+
 
 class ZeroMeanOUNoise:
     """Ornstein-Uhlenbeck process with fixed zero mean."""

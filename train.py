@@ -79,7 +79,7 @@ def ddpg(env, agent, n_episodes, eps_start=0., eps_min=0., eps_decay=0., beta_st
                 mean, std = np.mean(flattened_abs_noise), np.std(flattened_abs_noise)
                 report_str += " | Avg Actor Noise Magnitude: {:>6.4f} +- {:<6.4f}"\
                               .format(mean, std)
-                actions_std = agent.actor_noise_std()
+                actions_std = agent.estimate_actor_noise_std()
                 report_str += " | Actor Action Std: {:>6.4f}".format(actions_std)
             if critic_noisy_params:
                 flattened_abs_noise = np.concatenate([param.data.abs().cpu().numpy()
